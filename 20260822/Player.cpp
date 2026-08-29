@@ -1,258 +1,264 @@
 #include "Player.h"
-#include "Map.h"
+#include "Config.h"
 #include "DxLib.h"
 
 
-namespace
+void Player::Init()
 {
-    //========================================
-    // アニメーション方向
-    //========================================
-
-    constexpr int ANIM_DOWN = 0;
-    constexpr int ANIM_LEFT = 1;
-    constexpr int ANIM_RIGHT = 2;
-    constexpr int ANIM_UP = 3;
-}
-
-
-//========================================
-// コンストラクタ
-//========================================
-
-Player::Player()
-{
-    x = 0.0f;
-    y = 0.0f;
-
-    velocityX = 0.0f;
-    velocityY = 0.0f;
-
-    animTimer = 0.0f;
-
-    animNowType = ANIM_DOWN;
-    animNowPattern = 1;
-    animNowIndex = 1;
-
-    drawOffsetX = 0;
-    drawOffsetY = 0;
-
-
-    for (int i = 0; i < Config::ANIM_PATTERN_NUM * Config::ANIM_TYPE_NUM; i++)
-    {
-        playerImg[i] = -1;
-    }
-}
-
-
-//========================================
-// デストラクタ
-//========================================
-
-Player::~Player()
-{
-    for (int i = 0; i < Config::ANIM_PATTERN_NUM * Config::ANIM_TYPE_NUM; i++)
-    {
-        if (playerImg[i] != -1)
-        {
-            DeleteGraph(playerImg[i]);
-
-            playerImg[i] = -1;
-        }
-    }
-}
-
-
-//========================================
-// 初期化
-//========================================
-
-bool Player::Init()
-{
-    //========================================
-    // 初期座標
-    //========================================
-
     x = Config::PLAYER_START_X;
     y = Config::PLAYER_START_Y;
 
-
     velocityX = 0.0f;
     velocityY = 0.0f;
 
-    animTimer = 0.0f;
+    jumpFlag = false;
+    groundFlag = false;
+    headHitFlag = false;
+
+    previousJump = false;
+
+    animationTimer = 0.0f;
+    animationType = 0;
+    animationPattern = 0;
 
 
-    animNowType = ANIM_DOWN;
-    animNowPattern = 1;
+    // 当たり判定
+    collision.Init(Config::PLAYER_WIDTH, Config::PLAYER_HEIGHT);
 
-    animNowIndex = animNowPattern + animNowType * Config::ANIM_PATTERN_NUM;
+    footCollision.Init(Config::PLAYER_WIDTH - Config::COLLIDER_OFFSET, 1.0f);
 
-
-    //========================================
-    // 画像読み込み
-    //========================================
-
-    int result = LoadDivGraph(Config::PLAYER_IMAGE_PATH, Config::ANIM_PATTERN_NUM * Config::ANIM_TYPE_NUM,
-        Config::ANIM_PATTERN_NUM, Config::ANIM_TYPE_NUM, Config::PLAYER_IMAGE_SIZE_X, Config::PLAYER_IMAGE_SIZE_Y, playerImg);
+    headCollision.Init(Config::PLAYER_WIDTH - Config::COLLIDER_OFFSET, 1.0f);
 
 
-    if (result != 0)
-    {
-        return false;
-    }
-
-
-    //========================================
-    // 描画位置補正
-    //========================================
-
-    drawOffsetX = (Config::PLAYER_HIT_SIZE_X - Config::PLAYER_IMAGE_SIZE_X) / 2;
-
-
-    drawOffsetY = Config::PLAYER_HIT_SIZE_Y - Config::PLAYER_IMAGE_SIZE_Y;
-
-
-    return true;
+    // プレイヤー画像読み込み
+    LoadDivGraph("img/chara.png", Config::PLAYER_ANIM_PATTERN_NUM * Config::PLAYER_ANIM_TYPE_NUM,
+        Config::PLAYER_ANIM_PATTERN_NUM, Config::PLAYER_ANIM_TYPE_NUM,
+        Config::PLAYER_IMAGE_WIDTH, Config::PLAYER_IMAGE_HEIGHT, playerImg);
 }
 
 
-//========================================
-// 更新
-//========================================
-
-void Player::Update(float deltaTime, const Map& map)
+void Player::Update(float deltaTime)
 {
-    //========================================
-    // 速度をリセット
-    //========================================
-
-    velocityX = 0.0f;
-    velocityY = 0.0f;
-
-
-    bool isMove = false;
-
-
-    //========================================
-    // キー入力
-    //========================================
-
-    if (CheckHitKey(KEY_INPUT_UP))
+    // 接地している
+    if (groundFlag)
     {
-        velocityY = -Config::PLAYER_MOVE_SPEED;
-
-        animNowType = ANIM_UP;
-
-        isMove = true;
+        jumpFlag = false;
+        velocityY = 0.0f;
+    }
+    else
+    {
+        jumpFlag = true;
     }
 
 
-    if (CheckHitKey(KEY_INPUT_DOWN))
-    {
-        velocityY = Config::PLAYER_MOVE_SPEED;
-
-        animNowType = ANIM_DOWN;
-
-        isMove = true;
-    }
+    Move(deltaTime);
 
 
-    if (CheckHitKey(KEY_INPUT_LEFT))
-    {
-        velocityX = -Config::PLAYER_MOVE_SPEED;
+    // コライダー位置更新
+    collision.SetPosition(x, y);
 
-        animNowType = ANIM_LEFT;
+    footCollision.SetPosition(x + Config::COLLIDER_OFFSET / 2.0f, y + Config::PLAYER_HEIGHT);
 
-        isMove = true;
-    }
+    headCollision.SetPosition(x + Config::COLLIDER_OFFSET / 2.0f, y - 1.0f);
 
 
-    if (CheckHitKey(KEY_INPUT_RIGHT))
-    {
-        velocityX = Config::PLAYER_MOVE_SPEED;
-
-        animNowType = ANIM_RIGHT;
-
-        isMove = true;
-    }
-
-
-    //========================================
-    // 移動量
-    //========================================
-
-    float moveX = velocityX * deltaTime;
-
-    float moveY = velocityY * deltaTime;
-
-
-    //========================================
-    // X方向移動
-    //========================================
-
-    x += moveX;
-
-
-    map.ResolveHorizontalCollision(x, y, Config::PLAYER_HIT_SIZE_X, Config::PLAYER_HIT_SIZE_Y, moveX);
-
-
-    //========================================
-    // Y方向移動
-    //========================================
-
-    y += moveY;
-
-
-    map.ResolveVerticalCollision(x, y, Config::PLAYER_HIT_SIZE_X, Config::PLAYER_HIT_SIZE_Y, moveY);
-
-
-    //========================================
     // アニメーション
-    //========================================
-
-    if (isMove)
+    if (velocityX != 0.0f)
     {
-        animTimer += deltaTime;
+        animationTimer += deltaTime;
 
-
-        if (animTimer >= 1.0f / Config::ANIMATION_FPS)
+        if (animationTimer > 1.0f / Config::PLAYER_ANIMATION_FPS)
         {
-            animTimer = 0.0f;
+            animationTimer = 0.0f;
 
-            animNowPattern++;
+            animationPattern++;
 
-            animNowPattern %= Config::ANIM_PATTERN_NUM;
+            animationPattern %= Config::PLAYER_ANIM_PATTERN_NUM;
         }
     }
     else
     {
-        // 静止時
-        animNowPattern = 1;
+        animationPattern = 1;
     }
-
-
-    //========================================
-    // 描画する画像番号
-    //========================================
-
-    animNowIndex = animNowPattern + animNowType * Config::ANIM_PATTERN_NUM;
 }
 
 
-//========================================
-// 描画
-//========================================
+void Player::Move(float deltaTime)
+{
+    //====================================
+    // 左右移動
+    //====================================
+
+    if (CheckHitKey(KEY_INPUT_LEFT))
+    {
+        velocityX -=
+            Config::PLAYER_ACCEL * deltaTime;
+
+        animationType = 1;
+    }
+
+    if (CheckHitKey(KEY_INPUT_RIGHT))
+    {
+        velocityX +=
+            Config::PLAYER_ACCEL * deltaTime;
+
+        animationType = 2;
+    }
+
+
+    //====================================
+    // 速度制限
+    //====================================
+
+    if (velocityX >
+        Config::PLAYER_MAX_SPEED)
+    {
+        velocityX =
+            Config::PLAYER_MAX_SPEED;
+    }
+
+    if (velocityX <
+        -Config::PLAYER_MAX_SPEED)
+    {
+        velocityX =
+            -Config::PLAYER_MAX_SPEED;
+    }
+
+
+    //====================================
+    // 摩擦
+    //====================================
+
+    if (!CheckHitKey(KEY_INPUT_LEFT) && !CheckHitKey(KEY_INPUT_RIGHT))
+    {
+        velocityX *=
+            Config::PLAYER_FRICTION;
+    }
+
+
+    //====================================
+    // ジャンプ
+    //====================================
+
+    bool jumpButton =
+        CheckHitKey(KEY_INPUT_SPACE);
+
+
+    if (jumpButton &&
+        !previousJump &&
+        groundFlag)
+    {
+        velocityY =
+            -Config::JUMP_POWER;
+
+        jumpFlag = true;
+        groundFlag = false;
+    }
+
+
+    previousJump = jumpButton;
+
+
+    //====================================
+    // 重力
+    //====================================
+
+    if (jumpFlag)
+    {
+        velocityY += Config::GRAVITY * deltaTime;
+    }
+
+
+    //====================================
+    // 頭をぶつけた
+    //====================================
+
+    if (headHitFlag && velocityY < 0.0f)
+    {
+        velocityY = 0.0f;
+    }
+
+
+    //====================================
+    // 落下速度制限
+    //====================================
+
+    if (velocityY > Config::MAX_FALL_SPEED)
+    {
+        velocityY = Config::MAX_FALL_SPEED;
+    }
+
+
+    //====================================
+    // 座標更新
+    //====================================
+
+    x += velocityX * deltaTime;
+    y += velocityY * deltaTime;
+}
+
 
 void Player::Draw()
 {
-    DrawGraph(static_cast<int>(x) + drawOffsetX, static_cast<int>(y) + drawOffsetY, playerImg[animNowIndex], TRUE);
+    int index = animationPattern + animationType * Config::PLAYER_ANIM_PATTERN_NUM;
+
+    // 当たり判定を基準に画像を配置
+    int drawX = static_cast<int>(x) - (Config::PLAYER_IMAGE_WIDTH - Config::PLAYER_WIDTH) / 2;
+
+    int drawY = static_cast<int>(y) + Config::PLAYER_HEIGHT - Config::PLAYER_IMAGE_HEIGHT;
 
 
-    //========================================
+    DrawGraph(drawX, drawY, playerImg[index], TRUE);
+
+
     // 当たり判定表示
-    //========================================
+    collision.Draw();
+}
 
-    DrawBox(static_cast<int>(x), static_cast<int>(y), static_cast<int>(x + Config::PLAYER_HIT_SIZE_X - 1),
-        static_cast<int>(y + Config::PLAYER_HIT_SIZE_Y - 1), GetColor(255, 0, 0), FALSE);
+
+void Player::Finalize()
+{
+    for (int i = 0; i < Config::PLAYER_ANIM_PATTERN_NUM * Config::PLAYER_ANIM_TYPE_NUM; i++)
+    {
+        DeleteGraph(playerImg[i]);
+    }
+}
+
+
+Collision Player::GetCollision() const
+{
+    return collision;
+}
+
+
+Collision Player::GetFootCollision() const
+{
+    return footCollision;
+}
+
+
+Collision Player::GetHeadCollision() const
+{
+    return headCollision;
+}
+
+
+void Player::FixCollision(const Collision& newCollision)
+{
+    x = newCollision.GetLeft();
+    y = newCollision.GetTop();
+
+    collision = newCollision;
+}
+
+
+void Player::SetGround(bool ground)
+{
+    groundFlag = ground;
+}
+
+
+void Player::SetHeadHit(bool hit)
+{
+    headHitFlag = hit;
 }

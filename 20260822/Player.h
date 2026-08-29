@@ -1,80 +1,70 @@
 #pragma once
 
-#include "Config.h"
-
-
-class Map;
-
+#include "Collision.h"
 
 class Player
 {
 private:
 
-    //========================================
-    // 座標
-    //========================================
-
     float x;
     float y;
-
-
-    //========================================
-    // 速度
-    //========================================
 
     float velocityX;
     float velocityY;
 
+    // ジャンプ
+    bool jumpFlag;
+    bool groundFlag;
+    bool headHitFlag;
 
-    //========================================
+
+    // ジャンプキー
+    bool previousJump;
+
+
     // アニメーション
-    //========================================
+    float animationTimer;
 
-    float animTimer;
-
-    int animNowType;
-    int animNowPattern;
-    int animNowIndex;
+    int animationType;
+    int animationPattern;
 
 
-    //========================================
-    // 描画位置補正
-    //========================================
-
-    int drawOffsetX;
-    int drawOffsetY;
+    // 画像
+    int playerImg[3 * 4];
 
 
-    //========================================
-    // プレイヤー画像
-    //========================================
-
-    int playerImg[Config::ANIM_PATTERN_NUM * Config::ANIM_TYPE_NUM];
+    // コライダー
+    Collision collision;
+    Collision footCollision;
+    Collision headCollision;
 
 
 public:
 
-    Player();
-    ~Player();
+    void Init();
 
-
-    //========================================
-    // 初期化
-    //========================================
-
-    bool Init();
-
-
-    //========================================
-    // 更新
-    //========================================
-
-    void Update(float deltaTime, const Map& map);
-
-
-    //========================================
-    // 描画
-    //========================================
+    void Update(float deltaTime);
 
     void Draw();
+
+    void Finalize();
+
+
+    Collision GetCollision() const;
+
+    Collision GetFootCollision() const;
+
+    Collision GetHeadCollision() const;
+
+
+    void FixCollision(const Collision& collision);
+
+    void SetGround(bool ground);
+
+    void SetHeadHit(bool hit);
+
+
+private:
+
+    void Move(float deltaTime);
 };

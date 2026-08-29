@@ -1,7 +1,6 @@
 #include "Game.h"
 #include "DxLib.h"
-
-
+#include"Config.h"
 Game::Game()
 {
     nowCount = 0;
